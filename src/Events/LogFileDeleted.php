@@ -2,7 +2,7 @@
 
 namespace Opcodes\LogViewer\Events;
 
-use Illuminate\Foundation\Events\Dispatchable;
+use Themosis\Core\Events\Dispatchable;
 use Opcodes\LogViewer\LogFile;
 
 class LogFileDeleted
