@@ -222,7 +222,9 @@ Example attachment content
 
 ------=_Part_1_1234567890--
 EOF;
-    // The email string (as per RFC 5322) actually needs to use \r\n sequence instead of \n
+    // The email string (as per RFC 5322) actually needs to use \r\n sequence instead of \n.
+    // First normalise to \n to avoid doubling \r on Windows where the heredoc may already use \r\n.
+    $messageString = str_replace("\r\n", "\n", $messageString);
     $messageString = str_replace("\n", "\r\n", $messageString);
 
     $log = new LaravelLog($messageString);
@@ -241,7 +243,7 @@ EOF;
                     'size_formatted' => Utils::bytesForHumans(strlen('Example attachment content')),
                 ],
             ],
-            'html' => <<<'EOF'
+            'html' => str_replace("\r\n", "\n", <<<'EOF'
 <html>
 <head>
 <title>This is an HTML email</title>
@@ -250,8 +252,72 @@ EOF;
 <h1>This is the HTML version of the email</h1>
 </body>
 </html>
-EOF,
+EOF),
             'text' => 'This is the text version of the email.',
             'size_formatted' => Utils::bytesForHumans(strlen($messageString) - strlen('[2023-08-24 15:51:14] local.DEBUG: ')),
         ]);
+});
+
+it('filters stack traces in context when shorter stack traces is enabled', function () {
+    session(['log-viewer:shorter-stack-traces' => true]);
+    config([
+        'log-viewer.shorter_stack_trace_excludes' => [
+            '/vendor/symfony/',
+            '/vendor/laravel/framework/',
+        ],
+    ]);
+
+    $stackTrace = <<<'EOF'
+#0 /app/Controllers/UserController.php(25): someFunction()
+#1 /vendor/symfony/http-kernel/HttpKernel.php(158): handle()
+#2 /vendor/laravel/framework/Illuminate/Pipeline/Pipeline.php(128): process()
+#3 /app/Middleware/CustomMiddleware.php(42): handle()
+#4 /vendor/symfony/routing/Router.php(89): route()
+#5 /app/bootstrap/app.php(15): bootstrap()
+EOF;
+
+    $logText = <<<EOF
+[2024-10-18 12:00:00] production.ERROR: Exception occurred {"exception":"$stackTrace"}
+EOF;
+
+    $log = new LaravelLog($logText);
+
+    expect($log->context)->toHaveKey('exception')
+        ->and($log->context['exception'])->toContain('#0 /app/Controllers/UserController.php(25): someFunction()')
+        ->and($log->context['exception'])->toContain('#3 /app/Middleware/CustomMiddleware.php(42): handle()')
+        ->and($log->context['exception'])->toContain('#5 /app/bootstrap/app.php(15): bootstrap()')
+        ->and($log->context['exception'])->toContain('    ...')
+        ->and($log->context['exception'])->not->toContain('/vendor/symfony/http-kernel/')
+        ->and($log->context['exception'])->not->toContain('/vendor/laravel/framework/')
+        ->and($log->context['exception'])->not->toContain('/vendor/symfony/routing/');
+});
+
+it('does not filter context when shorter stack traces is disabled', function () {
+    session(['log-viewer:shorter-stack-traces' => false]);
+    config([
+        'log-viewer.shorter_stack_trace_excludes' => [
+            '/vendor/symfony/',
+            '/vendor/laravel/framework/',
+        ],
+    ]);
+
+    $stackTrace = <<<'EOF'
+#0 /app/Controllers/UserController.php(25): someFunction()
+#1 /vendor/symfony/http-kernel/HttpKernel.php(158): handle()
+#2 /vendor/laravel/framework/Illuminate/Pipeline/Pipeline.php(128): process()
+EOF;
+
+    $logText = <<<EOF
+[2024-10-18 12:00:00] production.ERROR: Exception occurred {"exception":"$stackTrace"}
+EOF;
+
+    $log = new LaravelLog($logText);
+
+    // Normalize expected value for cross-platform comparison (heredocs may have platform line endings)
+    $expectedStackTrace = str_replace(["\r\n", "\r"], "\n", $stackTrace);
+
+    expect($log->context)->toHaveKey('exception')
+        ->and($log->context['exception'])->toBe($expectedStackTrace)
+        ->and($log->context['exception'])->toContain('/vendor/symfony/http-kernel/')
+        ->and($log->context['exception'])->toContain('/vendor/laravel/framework/');
 });

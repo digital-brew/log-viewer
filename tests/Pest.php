@@ -3,6 +3,8 @@
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use Opcodes\LogViewer\Facades\LogViewer;
 use Opcodes\LogViewer\LogFile;
 use Opcodes\LogViewer\LogIndex;
 use Opcodes\LogViewer\Logs\LogType;
@@ -36,8 +38,10 @@ function generateLogFiles(array $files, ?string $content = null, bool $randomCon
 function generateLogFile(?string $fileName = null, ?string $content = null, bool $randomContent = false, $type = LogType::LARAVEL): LogFile
 {
     if (is_null($fileName)) {
-        $fileName = \Illuminate\Support\Str::random().'.log';
+        $fileName = Str::random().'.log';
     }
+
+    $fileName = str_replace('/', DIRECTORY_SEPARATOR, $fileName);
 
     $path = storage_path('logs'.DIRECTORY_SEPARATOR.$fileName);
     $folder = dirname($path);
@@ -77,6 +81,9 @@ function dummyLogData(?int $lines = null, string $type = LogType::LARAVEL): stri
 
 function clearGeneratedLogFiles(): void
 {
+    $logReaderClass = LogViewer::logReaderClass();
+    $logReaderClass::clearInstances();
+
     File::cleanDirectory(storage_path('logs'));
     clearstatcache();
 }

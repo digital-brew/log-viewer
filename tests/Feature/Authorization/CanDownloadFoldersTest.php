@@ -21,21 +21,21 @@ function assertCanDownloadFolder(string $folderName, string $expectedFileName): 
 
 function assertCannotDownloadFolder(string $folderName): void
 {
-get(route('log-viewer.folders.request-download', $folderName))
-->assertForbidden();
+    get(route('log-viewer.folders.request-download', $folderName))
+        ->assertForbidden();
 }
 
 test('can download every folder by default', function () {
     generateLogFiles([$fileName = 'laravel.log']);
     $folder = LogViewer::getFolder('');
 
-    assertCanDownloadFolder($folder->identifier, 'root.zip');
+    assertCanDownloadFolder($folder->identifier, LogFolder::rootPrefix().'.zip');
 });
 
 test('cannot download a folder that\'s not found', function () {
-get(route('log-viewer.folders.request-download', 'notfound'))
-->assertNotFound();
-    });
+    get(route('log-viewer.folders.request-download', 'notfound'))
+        ->assertNotFound();
+});
 
 test('"downloadLogFolder" gate can prevent folder download', function () {
     generateLogFiles([$fileName = 'laravel.log']);
@@ -47,7 +47,7 @@ test('"downloadLogFolder" gate can prevent folder download', function () {
     // now let's allow access again
     Gate::define('downloadLogFolder', fn (mixed $user) => true);
 
-    assertCanDownloadFolder($folder->identifier, 'root.zip');
+    assertCanDownloadFolder($folder->identifier, LogFolder::rootPrefix().'.zip');
 });
 
 test('"downloadLogFolder" gate is supplied with a log folder object', function () {
@@ -63,7 +63,7 @@ test('"downloadLogFolder" gate is supplied with a log folder object', function (
         return true;
     });
 
-    assertCanDownloadFolder($expectedFolder->identifier, 'root.zip');
+    assertCanDownloadFolder($expectedFolder->identifier, LogFolder::rootPrefix().'.zip');
 
     expect($gateChecked)->toBeTrue();
 });
